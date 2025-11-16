@@ -143,12 +143,14 @@ const MIN_SWIPE_DISTANCE = 30; // Minimum distance for a swipe to register
 function handleTouchStart(e) {
     touchStartX = e.changedTouches[0].screenX;
     touchStartY = e.changedTouches[0].screenY;
+    e.preventDefault();
 }
 
 function handleTouchEnd(e) {
     touchEndX = e.changedTouches[0].screenX;
     touchEndY = e.changedTouches[0].screenY;
     handleSwipe();
+    e.preventDefault();
 }
 
 function handleSwipe() {
@@ -185,9 +187,12 @@ function handleSwipe() {
     }
 }
 
-// Register touch listeners
-document.addEventListener('touchstart', handleTouchStart);
-document.addEventListener('touchend', handleTouchEnd);
+// Register touch listeners with passive: false to allow preventDefault
+document.addEventListener('touchstart', handleTouchStart, { passive: false });
+document.addEventListener('touchend', handleTouchEnd, { passive: false });
+document.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+}, { passive: false });
 
 
 var snakeHead_X = 0;
