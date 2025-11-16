@@ -132,6 +132,63 @@ function keyPressed(e) {
 // Register keyboard listener
 document.addEventListener('keydown', keyPressed);
 
+// Touch/swipe handling
+let touchStartX = 0;
+let touchStartY = 0;
+let touchEndX = 0;
+let touchEndY = 0;
+
+const MIN_SWIPE_DISTANCE = 30; // Minimum distance for a swipe to register
+
+function handleTouchStart(e) {
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
+}
+
+function handleTouchEnd(e) {
+    touchEndX = e.changedTouches[0].screenX;
+    touchEndY = e.changedTouches[0].screenY;
+    handleSwipe();
+}
+
+function handleSwipe() {
+    const deltaX = touchEndX - touchStartX;
+    const deltaY = touchEndY - touchStartY;
+
+    // Check if swipe meets minimum distance
+    if (Math.abs(deltaX) < MIN_SWIPE_DISTANCE && Math.abs(deltaY) < MIN_SWIPE_DISTANCE) {
+        return; // Not a swipe, ignore
+    }
+
+    let newDirection = null;
+
+    // Determine swipe direction (horizontal vs vertical)
+    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        // Horizontal swipe
+        if (deltaX > 0) {
+            newDirection = 'right';
+        } else {
+            newDirection = 'left';
+        }
+    } else {
+        // Vertical swipe
+        if (deltaY > 0) {
+            newDirection = 'down';
+        } else {
+            newDirection = 'up';
+        }
+    }
+
+    // Add to buffer (max 2 inputs buffered), same logic as keyboard
+    if (newDirection && inputBuffer.length < 2) {
+        inputBuffer.push(newDirection);
+    }
+}
+
+// Register touch listeners
+document.addEventListener('touchstart', handleTouchStart);
+document.addEventListener('touchend', handleTouchEnd);
+
 
 var snakeHead_X = 0;
 var snakeHead_Y = 0;
