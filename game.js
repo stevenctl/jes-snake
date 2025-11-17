@@ -269,10 +269,30 @@ var snakeBody = []; // Array to store body segments
 // Input buffer for queuing direction changes
 var inputBuffer = [];
 
-var food_X = 10;
-var food_Y = 10;
+var food_X = 7;
+var food_Y = 5;
 
 var GRID_SIZE = 20;
+
+// Building collision boxes in the main room (in grid coordinates)
+const buildings = [
+    {x: 1, y: 11, width: 3, height: 9},    // Building 1 - tall building on left
+    {x: 5, y: 13, width: 2, height: 7},    // Building 2 - medium building
+    {x: 8, y: 15, width: 3, height: 5},    // Building 3 - short wide building
+    {x: 13, y: 9, width: 2, height: 11},   // Building 4 - very tall building
+    {x: 16, y: 12, width: 2, height: 8}    // Building 5 - medium building on right
+];
+
+// Check if a position collides with any building
+function collidesWithBuilding(x, y) {
+    for (let building of buildings) {
+        if (x >= building.x && x < building.x + building.width &&
+            y >= building.y && y < building.y + building.height) {
+            return true;
+        }
+    }
+    return false;
+}
 
 // Score tracking
 var score = 0;
@@ -280,6 +300,13 @@ var score = 0;
 // Viewport/Camera offset
 var cameraOffsetX = 0;
 var cameraOffsetY = 0;
+
+// Target camera position for smooth transitions
+var targetCameraX = 0;
+var targetCameraY = 0;
+
+// Camera transition speed (0 to 1, higher = faster)
+const CAMERA_LERP_SPEED = 0.1;
 
 // Secret room state
 var inSecretRoom = false;
@@ -393,11 +420,21 @@ function updateGameState() {
         if (snakeHead_Y != GRID_SIZE - 1 && snakeHead_X > GRID_SIZE - 1) snakeHead_X = GRID_SIZE - 1;
         if (snakeHead_Y > GRID_SIZE - 1) snakeHead_Y = GRID_SIZE - 1;
 
+        // Building collision - prevent snake from moving into buildings
+        if (collidesWithBuilding(snakeHead_X, snakeHead_Y)) {
+            // Revert to previous position
+            snakeHead_X = prevSnakeHead_X;
+            snakeHead_Y = prevSnakeHead_Y;
+        }
+
         // Food collision
         if (snakeHead_X == food_X && snakeHead_Y == food_Y) {
             snakeBody.push({x: snakeHead_X, y: snakeHead_Y});
-            food_X = Math.floor(Math.random() * GRID_SIZE);
-            food_Y = Math.floor(Math.random() * GRID_SIZE);
+            // Spawn food at random position, avoiding buildings
+            do {
+                food_X = Math.floor(Math.random() * GRID_SIZE);
+                food_Y = Math.floor(Math.random() * GRID_SIZE);
+            } while (collidesWithBuilding(food_X, food_Y));
             score += 1;
             // Increase speed (decrease tick rate)
             currentTickRate = Math.max(MIN_TICK_RATE, currentTickRate - SPEED_INCREASE_PER_FOOD);
@@ -617,105 +654,268 @@ function updateDebugDisplay() {
 function render(interpolation) {
     clearCanvas();
 
-    // Update camera position based on which room we're in
-    if (!inSecretRoom) {
-        cameraOffsetX = 0;
-        cameraOffsetY = 0;
-    } else {
-        cameraOffsetX = 0;
-        cameraOffsetY = 0;
+    // Draw sky background for main room
+    ctx.fillStyle = '#87CEEB';  // Sky blue
+    ctx.fillRect(-cameraOffsetX * GRID_SIZE, 0, GRID_SIZE * GRID_SIZE, canvas.height);
+
+    // Draw sun in top right corner of main room
+    const sunOffsetX = -cameraOffsetX * GRID_SIZE;
+    ctx.fillStyle = '#FFD700';
+    ctx.beginPath();
+    ctx.arc(sunOffsetX + 350, 50, 30, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Draw city skyline in background
+    const cityOffsetX = -cameraOffsetX * GRID_SIZE;
+
+    // Building 1 - tall building on left
+    ctx.fillStyle = '#4A4A4A';
+    ctx.fillRect(cityOffsetX + 20, canvas.height - 180, 60, 180);
+    // Windows
+    ctx.fillStyle = '#FFD700';
+    for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 3; col++) {
+            ctx.fillRect(cityOffsetX + 30 + col * 15, canvas.height - 170 + row * 20, 8, 12);
+        }
     }
 
-    if (!inSecretRoom) {
-        // RENDER MAIN ROOM
-        // Interpolate snake head position
-        const interpHeadX = prevSnakeHead_X + (snakeHead_X - prevSnakeHead_X) * interpolation;
-        const interpHeadY = prevSnakeHead_Y + (snakeHead_Y - prevSnakeHead_Y) * interpolation;
-
-        // Draw snake body segments with interpolation
-        for (let i = snakeBody.length - 1; i >= 0; i--) {
-            const prevPos = prevSnakeBody[i] || snakeBody[i];
-            const interpX = prevPos.x + (snakeBody[i].x - prevPos.x) * interpolation;
-            const interpY = prevPos.y + (snakeBody[i].y - prevPos.y) * interpolation;
-
-            // Draw tail with triangular shape
-            if (i === snakeBody.length - 1 && snakeBody.length > 0) {
-                const nextSegment = snakeBody.length > 1 ? snakeBody[i - 1] : {x: snakeHead_X, y: snakeHead_Y};
-                const nextPrevPos = prevSnakeBody[i - 1] || nextSegment;
-                const interpNextX = nextPrevPos.x + (nextSegment.x - nextPrevPos.x) * interpolation;
-                const interpNextY = nextPrevPos.y + (nextSegment.y - nextPrevPos.y) * interpolation;
-                drawTail(interpX, interpY, interpNextX, interpNextY, 'red');
-            } else {
-                drawCircle(interpX, interpY, GRID_SIZE / 2, 'red');
-            }
+    // Building 2 - medium building
+    ctx.fillStyle = '#5A5A5A';
+    ctx.fillRect(cityOffsetX + 100, canvas.height - 140, 50, 140);
+    ctx.fillStyle = '#FFD700';
+    for (let row = 0; row < 6; row++) {
+        for (let col = 0; col < 2; col++) {
+            ctx.fillRect(cityOffsetX + 110 + col * 18, canvas.height - 130 + row * 20, 10, 12);
         }
+    }
 
-        // Draw snake head with face (interpolated)
+    // Building 3 - short wide building
+    ctx.fillStyle = '#3A3A3A';
+    ctx.fillRect(cityOffsetX + 170, canvas.height - 100, 70, 100);
+    ctx.fillStyle = '#FFD700';
+    for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < 3; col++) {
+            ctx.fillRect(cityOffsetX + 180 + col * 20, canvas.height - 90 + row * 20, 12, 12);
+        }
+    }
+
+    // Building 4 - very tall building
+    ctx.fillStyle = '#2A2A2A';
+    ctx.fillRect(cityOffsetX + 260, canvas.height - 220, 55, 220);
+    ctx.fillStyle = '#FFD700';
+    for (let row = 0; row < 10; row++) {
+        for (let col = 0; col < 2; col++) {
+            ctx.fillRect(cityOffsetX + 270 + col * 20, canvas.height - 210 + row * 20, 10, 12);
+        }
+    }
+
+    // Building 5 - medium building on right
+    ctx.fillStyle = '#4A4A4A';
+    ctx.fillRect(cityOffsetX + 330, canvas.height - 160, 50, 160);
+    ctx.fillStyle = '#FFD700';
+    for (let row = 0; row < 7; row++) {
+        for (let col = 0; col < 2; col++) {
+            ctx.fillRect(cityOffsetX + 340 + col * 18, canvas.height - 150 + row * 20, 10, 12);
+        }
+    }
+
+    // Draw village background for secret room
+    const secretRoomWorldX = GRID_SIZE * GRID_SIZE;  // Secret room starts 20 grid units (400px) to the right
+    const villageOffsetX = secretRoomWorldX - cameraOffsetX * GRID_SIZE;
+
+    // Draw sky background for secret room
+    const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    skyGradient.addColorStop(0, '#87CEEB');  // Sky blue at top
+    skyGradient.addColorStop(1, '#E0F6FF');  // Lighter blue at bottom
+    ctx.fillStyle = skyGradient;
+    ctx.fillRect(villageOffsetX, 0, GRID_SIZE * GRID_SIZE, canvas.height);
+
+    // Draw grass/ground
+    ctx.fillStyle = '#90EE90';
+    ctx.fillRect(villageOffsetX, canvas.height - 80, GRID_SIZE * GRID_SIZE, 80);
+
+    // House 1 - small cottage on left
+    ctx.fillStyle = '#D2691E';
+    ctx.fillRect(villageOffsetX + 30, canvas.height - 140, 60, 50);
+    // Roof
+    ctx.fillStyle = '#8B4513';
+    ctx.beginPath();
+    ctx.moveTo(villageOffsetX + 20, canvas.height - 140);
+    ctx.lineTo(villageOffsetX + 60, canvas.height - 170);
+    ctx.lineTo(villageOffsetX + 100, canvas.height - 140);
+    ctx.closePath();
+    ctx.fill();
+    // Door
+    ctx.fillStyle = '#654321';
+    ctx.fillRect(villageOffsetX + 50, canvas.height - 110, 20, 30);
+    // Window
+    ctx.fillStyle = '#87CEEB';
+    ctx.fillRect(villageOffsetX + 40, canvas.height - 125, 12, 12);
+
+    // House 2 - medium house in center
+    ctx.fillStyle = '#F5DEB3';
+    ctx.fillRect(villageOffsetX + 140, canvas.height - 160, 70, 70);
+    // Roof
+    ctx.fillStyle = '#A0522D';
+    ctx.beginPath();
+    ctx.moveTo(villageOffsetX + 130, canvas.height - 160);
+    ctx.lineTo(villageOffsetX + 175, canvas.height - 195);
+    ctx.lineTo(villageOffsetX + 220, canvas.height - 160);
+    ctx.closePath();
+    ctx.fill();
+    // Door
+    ctx.fillStyle = '#654321';
+    ctx.fillRect(villageOffsetX + 165, canvas.height - 115, 20, 35);
+    // Windows
+    ctx.fillStyle = '#87CEEB';
+    ctx.fillRect(villageOffsetX + 150, canvas.height - 140, 15, 15);
+    ctx.fillRect(villageOffsetX + 185, canvas.height - 140, 15, 15);
+
+    // House 3 - small house on right
+    ctx.fillStyle = '#FFE4B5';
+    ctx.fillRect(villageOffsetX + 280, canvas.height - 130, 50, 40);
+    // Roof
+    ctx.fillStyle = '#8B4513';
+    ctx.beginPath();
+    ctx.moveTo(villageOffsetX + 272, canvas.height - 130);
+    ctx.lineTo(villageOffsetX + 305, canvas.height - 155);
+    ctx.lineTo(villageOffsetX + 338, canvas.height - 130);
+    ctx.closePath();
+    ctx.fill();
+    // Door
+    ctx.fillStyle = '#654321';
+    ctx.fillRect(villageOffsetX + 295, canvas.height - 105, 15, 25);
+    // Window
+    ctx.fillStyle = '#87CEEB';
+    ctx.fillRect(villageOffsetX + 285, canvas.height - 118, 10, 10);
+
+    // Tree 1 - simple tree
+    ctx.fillStyle = '#8B4513';
+    ctx.fillRect(villageOffsetX + 110, canvas.height - 120, 10, 30);
+    ctx.fillStyle = '#228B22';
+    ctx.beginPath();
+    ctx.arc(villageOffsetX + 115, canvas.height - 125, 20, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Tree 2 - another tree
+    ctx.fillStyle = '#8B4513';
+    ctx.fillRect(villageOffsetX + 250, canvas.height - 115, 8, 25);
+    ctx.fillStyle = '#228B22';
+    ctx.beginPath();
+    ctx.arc(villageOffsetX + 254, canvas.height - 120, 18, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Update target camera position based on which room we're in
+    if (!inSecretRoom) {
+        targetCameraX = 0;
+        targetCameraY = 0;
+    } else {
+        targetCameraX = 20;  // Secret room is 20 grid units to the right
+        targetCameraY = 0;
+    }
+
+    // Smoothly interpolate camera position towards target
+    cameraOffsetX += (targetCameraX - cameraOffsetX) * CAMERA_LERP_SPEED;
+    cameraOffsetY += (targetCameraY - cameraOffsetY) * CAMERA_LERP_SPEED;
+
+    // RENDER MAIN ROOM (always render)
+    // Interpolate snake head position
+    const interpHeadX = prevSnakeHead_X + (snakeHead_X - prevSnakeHead_X) * interpolation;
+    const interpHeadY = prevSnakeHead_Y + (snakeHead_Y - prevSnakeHead_Y) * interpolation;
+
+    // Draw snake body segments with interpolation
+    for (let i = snakeBody.length - 1; i >= 0; i--) {
+        const prevPos = prevSnakeBody[i] || snakeBody[i];
+        const interpX = prevPos.x + (snakeBody[i].x - prevPos.x) * interpolation;
+        const interpY = prevPos.y + (snakeBody[i].y - prevPos.y) * interpolation;
+
+        // Draw tail with triangular shape
+        if (i === snakeBody.length - 1 && snakeBody.length > 0) {
+            const nextSegment = snakeBody.length > 1 ? snakeBody[i - 1] : {x: snakeHead_X, y: snakeHead_Y};
+            const nextPrevPos = prevSnakeBody[i - 1] || nextSegment;
+            const interpNextX = nextPrevPos.x + (nextSegment.x - nextPrevPos.x) * interpolation;
+            const interpNextY = nextPrevPos.y + (nextSegment.y - nextPrevPos.y) * interpolation;
+            drawTail(interpX, interpY, interpNextX, interpNextY, 'red');
+        } else {
+            drawCircle(interpX, interpY, GRID_SIZE / 2, 'red');
+        }
+    }
+
+    // Draw snake head with face (interpolated)
+    if (!inSecretRoom) {
         drawSnakeHead(interpHeadX, interpHeadY, GRID_SIZE / 2, 'red', snakeDirection);
-    } else {
-        // RENDER SECRET ROOM
-        // Interpolate secret room snake head position
-        const interpSecretHeadX = prevSecretSnakeHead_X + (secretSnakeHead_X - prevSecretSnakeHead_X) * interpolation;
-        const interpSecretHeadY = prevSecretSnakeHead_Y + (secretSnakeHead_Y - prevSecretSnakeHead_Y) * interpolation;
+    }
 
-        // Draw secret room snake body segments
-        for (let i = secretSnakeBody.length - 1; i >= 0; i--) {
-            const prevPos = prevSecretSnakeBody[i] || secretSnakeBody[i];
-            const interpX = prevPos.x + (secretSnakeBody[i].x - prevPos.x) * interpolation;
-            const interpY = prevPos.y + (secretSnakeBody[i].y - prevPos.y) * interpolation;
+    // Draw main room food
+    drawApple(food_X, food_Y);
 
-            if (i === secretSnakeBody.length - 1 && secretSnakeBody.length > 0) {
-                const nextSegment = secretSnakeBody.length > 1 ? secretSnakeBody[i - 1] : {x: secretSnakeHead_X, y: secretSnakeHead_Y};
-                const nextPrevPos = prevSecretSnakeBody[i - 1] || nextSegment;
-                const interpNextX = nextPrevPos.x + (nextSegment.x - nextPrevPos.x) * interpolation;
-                const interpNextY = nextPrevPos.y + (nextSegment.y - nextPrevPos.y) * interpolation;
-                drawTail(interpX, interpY, interpNextX, interpNextY, 'red');
-            } else {
-                drawCircle(interpX, interpY, GRID_SIZE / 2, 'red');
-            }
+    // Draw hole indicator at bottom right
+    ctx.fillStyle = '#333';
+    drawRect((GRID_SIZE - 1 - cameraOffsetX) * GRID_SIZE, (GRID_SIZE - 1 - cameraOffsetY) * GRID_SIZE, GRID_SIZE * 2, GRID_SIZE, '#333');
+
+    // RENDER SECRET ROOM (always render, offset by 20 grid units)
+    // Temporarily adjust camera offset to render secret room at x+20
+    const secretRoomOffsetX = 20;
+    const originalCameraX = cameraOffsetX;
+    cameraOffsetX = cameraOffsetX - secretRoomOffsetX;
+
+    // Interpolate secret room snake head position
+    const interpSecretHeadX = prevSecretSnakeHead_X + (secretSnakeHead_X - prevSecretSnakeHead_X) * interpolation;
+    const interpSecretHeadY = prevSecretSnakeHead_Y + (secretSnakeHead_Y - prevSecretSnakeHead_Y) * interpolation;
+
+    // Draw secret room snake body segments
+    for (let i = secretSnakeBody.length - 1; i >= 0; i--) {
+        const prevPos = prevSecretSnakeBody[i] || secretSnakeBody[i];
+        const interpX = prevPos.x + (secretSnakeBody[i].x - prevPos.x) * interpolation;
+        const interpY = prevPos.y + (secretSnakeBody[i].y - prevPos.y) * interpolation;
+
+        if (i === secretSnakeBody.length - 1 && secretSnakeBody.length > 0) {
+            const nextSegment = secretSnakeBody.length > 1 ? secretSnakeBody[i - 1] : {x: secretSnakeHead_X, y: secretSnakeHead_Y};
+            const nextPrevPos = prevSecretSnakeBody[i - 1] || nextSegment;
+            const interpNextX = nextPrevPos.x + (nextSegment.x - nextPrevPos.x) * interpolation;
+            const interpNextY = nextPrevPos.y + (nextSegment.y - nextPrevPos.y) * interpolation;
+            drawTail(interpX, interpY, interpNextX, interpNextY, 'red');
+        } else {
+            drawCircle(interpX, interpY, GRID_SIZE / 2, 'red');
         }
+    }
 
-        // Draw secret room snake head
+    // Draw secret room snake head
+    if (inSecretRoom) {
         drawSnakeHead(interpSecretHeadX, interpSecretHeadY, GRID_SIZE / 2, 'red', secretSnakeDirection);
+    }
 
-        // Draw enemy snake
-        // Interpolate enemy head position
-        const interpEnemyHeadX = prevEnemyHead_X + (enemyHead_X - prevEnemyHead_X) * interpolation;
-        const interpEnemyHeadY = prevEnemyHead_Y + (enemyHead_Y - prevEnemyHead_Y) * interpolation;
+    // Draw enemy snake
+    // Interpolate enemy head position
+    const interpEnemyHeadX = prevEnemyHead_X + (enemyHead_X - prevEnemyHead_X) * interpolation;
+    const interpEnemyHeadY = prevEnemyHead_Y + (enemyHead_Y - prevEnemyHead_Y) * interpolation;
 
-        // Draw enemy body segments
-        for (let i = enemyBody.length - 1; i >= 0; i--) {
-            const prevPos = prevEnemyBody[i] || enemyBody[i];
-            const interpX = prevPos.x + (enemyBody[i].x - prevPos.x) * interpolation;
-            const interpY = prevPos.y + (enemyBody[i].y - prevPos.y) * interpolation;
+    // Draw enemy body segments
+    for (let i = enemyBody.length - 1; i >= 0; i--) {
+        const prevPos = prevEnemyBody[i] || enemyBody[i];
+        const interpX = prevPos.x + (enemyBody[i].x - prevPos.x) * interpolation;
+        const interpY = prevPos.y + (enemyBody[i].y - prevPos.y) * interpolation;
 
-            if (i === enemyBody.length - 1 && enemyBody.length > 0) {
-                const nextSegment = enemyBody.length > 1 ? enemyBody[i - 1] : {x: enemyHead_X, y: enemyHead_Y};
-                const nextPrevPos = prevEnemyBody[i - 1] || nextSegment;
-                const interpNextX = nextPrevPos.x + (nextSegment.x - nextPrevPos.x) * interpolation;
-                const interpNextY = nextPrevPos.y + (nextSegment.y - nextPrevPos.y) * interpolation;
-                drawTail(interpX, interpY, interpNextX, interpNextY, 'yellow');
-            } else {
-                drawCircle(interpX, interpY, GRID_SIZE / 2, 'yellow');
-            }
+        if (i === enemyBody.length - 1 && enemyBody.length > 0) {
+            const nextSegment = enemyBody.length > 1 ? enemyBody[i - 1] : {x: enemyHead_X, y: enemyHead_Y};
+            const nextPrevPos = prevEnemyBody[i - 1] || nextSegment;
+            const interpNextX = nextPrevPos.x + (nextSegment.x - nextPrevPos.x) * interpolation;
+            const interpNextY = nextPrevPos.y + (nextSegment.y - nextPrevPos.y) * interpolation;
+            drawTail(interpX, interpY, interpNextX, interpNextY, 'yellow');
+        } else {
+            drawCircle(interpX, interpY, GRID_SIZE / 2, 'yellow');
         }
-
-        // Draw enemy head
-        drawCircle(interpEnemyHeadX, interpEnemyHeadY, GRID_SIZE / 2, 'yellow');
     }
 
-    // Draw food (with camera offset)
-    if (!inSecretRoom) {
-        drawApple(food_X, food_Y);
+    // Draw enemy head
+    drawCircle(interpEnemyHeadX, interpEnemyHeadY, GRID_SIZE / 2, 'yellow');
 
-        // Draw hole indicator at bottom right
-        ctx.fillStyle = '#333';
-        drawRect((GRID_SIZE - 1 - cameraOffsetX) * GRID_SIZE, (GRID_SIZE - 1 - cameraOffsetY) * GRID_SIZE, GRID_SIZE * 2, GRID_SIZE, '#333');
-    } else {
-        // Draw both food apples in secret room
-        drawApple(secretFood_X, secretFood_Y);
-        drawApple(secretFood2_X, secretFood2_Y);
-    }
+    // Draw both food apples in secret room
+    drawApple(secretFood_X, secretFood_Y);
+    drawApple(secretFood2_X, secretFood2_Y);
+
+    // Restore original camera offset
+    cameraOffsetX = originalCameraX;
 
     // Draw scoreboard in bottom left corner
     ctx.fillStyle = '#fff';
