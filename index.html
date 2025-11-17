@@ -7,15 +7,14 @@
     <style>
         body {
             margin: 0;
-            padding: 0;
+            padding: 20px;
             display: flex;
             justify-content: center;
             align-items: center;
+            gap: 20px;
             background-color: #222;
-            overflow: hidden;
-            position: fixed;
-            width: 100%;
-            height: 100%;
+            overflow: auto;
+            min-height: 100vh;
             overscroll-behavior: none;
             touch-action: none;
         }
@@ -23,11 +22,105 @@
             border: 2px solid #fff;
             background-color: #000;
             touch-action: none;
+            flex-shrink: 0;
+        }
+        #debug {
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            background-color: #000;
+            border: 2px solid #0f0;
+            padding: 15px;
+            min-width: 300px;
+            max-width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        #debug h3 {
+            margin-top: 0;
+            color: #0ff;
+            border-bottom: 1px solid #0f0;
+            padding-bottom: 5px;
+        }
+        #debug .section {
+            margin: 15px 0;
+        }
+        #debug .label {
+            color: #ff0;
+        }
+        #debug .tail-segment {
+            margin-left: 15px;
+            color: #0f0;
+        }
+        @media (max-width: 800px) {
+            body {
+                flex-direction: column;
+                padding: 10px;
+            }
+            #debug {
+                max-width: 100%;
+                max-height: 300px;
+            }
+        }
+        #controls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            display: flex;
+            gap: 10px;
+        }
+        #controls button {
+            background-color: #0f0;
+            border: 2px solid #0f0;
+            color: #000;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            font-weight: bold;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #controls button:hover {
+            background-color: #000;
+            color: #0f0;
+        }
+        #controls button:active {
+            transform: scale(0.95);
+        }
+        #controls button.paused {
+            background-color: #ff0;
+            border-color: #ff0;
         }
     </style>
 </head>
 <body>
+    <div id="controls">
+        <button id="pauseBtn">PAUSE</button>
+        <button id="playBtn" style="display: none;">PLAY</button>
+    </div>
     <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <div id="debug">
+        <h3>DEBUG INFO</h3>
+        <div class="section">
+            <div class="label">Room:</div>
+            <div id="room-info">Main Room</div>
+        </div>
+        <div class="section">
+            <div class="label">Head Position:</div>
+            <div id="head-pos">X: 0, Y: 0</div>
+        </div>
+        <div class="section">
+            <div class="label">Direction:</div>
+            <div id="direction">right</div>
+        </div>
+        <div class="section">
+            <div class="label">Tail Segments:</div>
+            <div id="tail-count">0</div>
+            <div id="tail-array"></div>
+        </div>
+    </div>
     <script src="game.js"></script>
 </body>
 </html>

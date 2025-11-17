@@ -6,8 +6,45 @@ const ctx = canvas.getContext('2d');
 const snakeFaceImage = new Image();
 snakeFaceImage.src = 'snakeface.png';
 
+// Create green apple image using canvas
+const appleImage = new Image();
+const appleCanvas = document.createElement('canvas');
+appleCanvas.width = 40;
+appleCanvas.height = 40;
+const appleCtx = appleCanvas.getContext('2d');
+
+// Draw apple
+appleCtx.fillStyle = '#4CAF50'; // Green apple body
+appleCtx.beginPath();
+appleCtx.arc(20, 22, 15, 0, Math.PI * 2);
+appleCtx.fill();
+
+// Apple highlight
+appleCtx.fillStyle = '#81C784';
+appleCtx.beginPath();
+appleCtx.arc(16, 18, 6, 0, Math.PI * 2);
+appleCtx.fill();
+
+// Stem
+appleCtx.fillStyle = '#795548';
+appleCtx.fillRect(18, 6, 4, 8);
+
+// Leaf
+appleCtx.fillStyle = '#2E7D32';
+appleCtx.beginPath();
+appleCtx.ellipse(25, 10, 6, 4, Math.PI / 4, 0, Math.PI * 2);
+appleCtx.fill();
+
+appleImage.src = appleCanvas.toDataURL();
+
 // Game configuration
 const TICK_RATE = 200; // ms per tick
+var currentTickRate = TICK_RATE; // Current tick rate (gets faster as snake grows)
+const SPEED_INCREASE_PER_FOOD = 3; // Decrease tick rate by this amount per food (faster)
+const MIN_TICK_RATE = 50; // Minimum tick rate (maximum speed)
+
+// Pause state
+var isPaused = false;
 
 // Input state
 const keys = {
@@ -63,6 +100,13 @@ function drawSnakeHead(x, y, radius, color, direction) {
 
     ctx.drawImage(snakeFaceImage, -faceSize / 2, -faceSize / 2, faceSize, faceSize);
     ctx.restore();
+}
+
+// Draw apple at grid position (with camera offset)
+function drawApple(x, y) {
+    const centerX = (x - cameraOffsetX) * GRID_SIZE;
+    const centerY = (y - cameraOffsetY) * GRID_SIZE;
+    ctx.drawImage(appleImage, centerX, centerY, GRID_SIZE, GRID_SIZE);
 }
 
 // Draw triangular tail with rounded tip (with camera offset)
@@ -194,6 +238,28 @@ document.addEventListener('touchmove', function(e) {
     e.preventDefault();
 }, { passive: false });
 
+// Pause/Play button handlers
+document.addEventListener('DOMContentLoaded', function() {
+    const pauseBtn = document.getElementById('pauseBtn');
+    const playBtn = document.getElementById('playBtn');
+
+    pauseBtn.addEventListener('click', function() {
+        isPaused = true;
+        pauseBtn.style.display = 'none';
+        playBtn.style.display = 'block';
+        playBtn.classList.add('paused');
+    });
+
+    playBtn.addEventListener('click', function() {
+        isPaused = false;
+        playBtn.style.display = 'none';
+        pauseBtn.style.display = 'block';
+        playBtn.classList.remove('paused');
+        // Reset last tick time to prevent sudden jumps
+        lastTickTime = performance.now();
+    });
+});
+
 
 var snakeHead_X = 0;
 var snakeHead_Y = 0;
@@ -292,8 +358,19 @@ function updateGameState() {
         // Check for entering secret room
         if (snakeHead_X >= GRID_SIZE && snakeHead_Y == GRID_SIZE - 1 && snakeDirection == 'right') {
             inSecretRoom = true;
-            // Copy body length to secret room snake
+            // Reset secret room head position to entrance
+            secretSnakeHead_X = 0;
+            secretSnakeHead_Y = GRID_SIZE - 1;
+            secretSnakeDirection = 'right';
+            // Copy body segments to secret room snake
             secretSnakeBody = [];
+            for (let i = 0; i < snakeBody.length; i++) {
+                secretSnakeBody.push({x: secretSnakeHead_X - i - 1, y: secretSnakeHead_Y});
+            }
+            // Initialize previous positions for smooth interpolation
+            prevSecretSnakeHead_X = secretSnakeHead_X;
+            prevSecretSnakeHead_Y = secretSnakeHead_Y;
+            prevSecretSnakeBody = secretSnakeBody.map(seg => ({x: seg.x, y: seg.y}));
             // Reset enemy to opposite corner from player entrance
             enemyHead_X = GRID_SIZE - 1;
             enemyHead_Y = 0;
@@ -303,6 +380,9 @@ function updateGameState() {
                 {x: GRID_SIZE - 4, y: 0},
                 {x: GRID_SIZE - 5, y: 0}
             ];
+            prevEnemyHead_X = enemyHead_X;
+            prevEnemyHead_Y = enemyHead_Y;
+            prevEnemyBody = enemyBody.map(seg => ({x: seg.x, y: seg.y}));
             enemyTickCounter = 0;
             return;
         }
@@ -319,6 +399,8 @@ function updateGameState() {
             food_X = Math.floor(Math.random() * GRID_SIZE);
             food_Y = Math.floor(Math.random() * GRID_SIZE);
             score += 1;
+            // Increase speed (decrease tick rate)
+            currentTickRate = Math.max(MIN_TICK_RATE, currentTickRate - SPEED_INCREASE_PER_FOOD);
         }
     } else {
         // SECRET ROOM UPDATE
@@ -352,6 +434,19 @@ function updateGameState() {
         // Check for leaving secret room
         if (secretSnakeHead_X < 0 && secretSnakeHead_Y == GRID_SIZE - 1 && secretSnakeDirection == 'left') {
             inSecretRoom = false;
+            // Set main room head position to exit location
+            snakeHead_X = GRID_SIZE - 1;
+            snakeHead_Y = GRID_SIZE - 1;
+            snakeDirection = 'left';
+            // Copy body segments from secret room to main room
+            snakeBody = [];
+            for (let i = 0; i < secretSnakeBody.length; i++) {
+                snakeBody.push({x: snakeHead_X + i + 1, y: snakeHead_Y});
+            }
+            // Store previous positions for smooth interpolation
+            prevSnakeHead_X = snakeHead_X;
+            prevSnakeHead_Y = snakeHead_Y;
+            prevSnakeBody = snakeBody.map(seg => ({x: seg.x, y: seg.y}));
             return;
         }
 
@@ -367,6 +462,8 @@ function updateGameState() {
             secretFood_X = Math.floor(Math.random() * GRID_SIZE);
             secretFood_Y = Math.floor(Math.random() * GRID_SIZE);
             score += 1;
+            // Increase speed (decrease tick rate)
+            currentTickRate = Math.max(MIN_TICK_RATE, currentTickRate - SPEED_INCREASE_PER_FOOD);
         }
 
         // Food collision - second food
@@ -375,6 +472,8 @@ function updateGameState() {
             secretFood2_X = Math.floor(Math.random() * GRID_SIZE);
             secretFood2_Y = Math.floor(Math.random() * GRID_SIZE);
             score += 1;
+            // Increase speed (decrease tick rate)
+            currentTickRate = Math.max(MIN_TICK_RATE, currentTickRate - SPEED_INCREASE_PER_FOOD);
         }
 
         // Update enemy snake (moves slower - every 2 ticks)
@@ -417,14 +516,99 @@ function updateGameState() {
             if (enemyHead_Y > GRID_SIZE - 1) enemyHead_Y = GRID_SIZE - 1;
         }
 
-        // Check collision between player and enemy
-        if (secretSnakeHead_X == enemyHead_X && secretSnakeHead_Y == enemyHead_Y) {
+        // Check if player head touches enemy body -> player loses
+        let playerTouchedEnemyBody = false;
+        for (let i = 0; i < enemyBody.length; i++) {
+            if (secretSnakeHead_X == enemyBody[i].x && secretSnakeHead_Y == enemyBody[i].y) {
+                playerTouchedEnemyBody = true;
+                break;
+            }
+        }
+
+        if (playerTouchedEnemyBody) {
             // Reset to main room at beginning
             inSecretRoom = false;
             snakeHead_X = 0;
             snakeHead_Y = 0;
             snakeDirection = 'right';
             snakeBody = [];
+            prevSnakeHead_X = snakeHead_X;
+            prevSnakeHead_Y = snakeHead_Y;
+            prevSnakeBody = [];
+            // Reset speed to initial value
+            currentTickRate = TICK_RATE;
+        }
+
+        // Check if enemy head touches player body -> enemy disappears
+        let enemyTouchedPlayerBody = false;
+        for (let i = 0; i < secretSnakeBody.length; i++) {
+            if (enemyHead_X == secretSnakeBody[i].x && enemyHead_Y == secretSnakeBody[i].y) {
+                enemyTouchedPlayerBody = true;
+                break;
+            }
+        }
+
+        if (enemyTouchedPlayerBody) {
+            // Respawn enemy at a random location away from player
+            enemyHead_X = Math.floor(Math.random() * GRID_SIZE);
+            enemyHead_Y = Math.floor(Math.random() * GRID_SIZE);
+            // Make sure enemy doesn't spawn too close to player
+            while (Math.abs(enemyHead_X - secretSnakeHead_X) < 5 && Math.abs(enemyHead_Y - secretSnakeHead_Y) < 5) {
+                enemyHead_X = Math.floor(Math.random() * GRID_SIZE);
+                enemyHead_Y = Math.floor(Math.random() * GRID_SIZE);
+            }
+            enemyBody = [
+                {x: enemyHead_X - 1, y: enemyHead_Y},
+                {x: enemyHead_X - 2, y: enemyHead_Y},
+                {x: enemyHead_X - 3, y: enemyHead_Y},
+                {x: enemyHead_X - 4, y: enemyHead_Y}
+            ];
+            prevEnemyHead_X = enemyHead_X;
+            prevEnemyHead_Y = enemyHead_Y;
+            prevEnemyBody = enemyBody.map(seg => ({x: seg.x, y: seg.y}));
+        }
+    }
+}
+
+// Update debug display
+function updateDebugDisplay() {
+    const roomInfo = document.getElementById('room-info');
+    const headPos = document.getElementById('head-pos');
+    const direction = document.getElementById('direction');
+    const tailCount = document.getElementById('tail-count');
+    const tailArray = document.getElementById('tail-array');
+
+    if (!inSecretRoom) {
+        roomInfo.textContent = 'Main Room';
+        headPos.textContent = `X: ${snakeHead_X}, Y: ${snakeHead_Y}`;
+        direction.textContent = snakeDirection;
+        tailCount.textContent = snakeBody.length;
+
+        // Display tail array
+        if (snakeBody.length === 0) {
+            tailArray.innerHTML = '<div class="tail-segment">[]</div>';
+        } else {
+            let html = '';
+            snakeBody.forEach((seg, i) => {
+                html += `<div class="tail-segment">[${i}] X: ${seg.x}, Y: ${seg.y}</div>`;
+            });
+            tailArray.innerHTML = html;
+        }
+    } else {
+        roomInfo.textContent = 'Secret Room';
+        headPos.textContent = `X: ${secretSnakeHead_X}, Y: ${secretSnakeHead_Y}`;
+        direction.textContent = secretSnakeDirection;
+        tailCount.textContent = secretSnakeBody.length;
+
+        // Display tail array
+        if (secretSnakeBody.length === 0) {
+            tailArray.innerHTML = '<div class="tail-segment">[]</div>';
+        } else {
+            let html = '';
+            secretSnakeBody.forEach((seg, i) => {
+                html += `<div class="tail-segment">[${i}] X: ${seg.x}, Y: ${seg.y}</div>`;
+            });
+            tailArray.innerHTML = html;
         }
     }
 }
@@ -522,21 +706,24 @@ function render(interpolation) {
 
     // Draw food (with camera offset)
     if (!inSecretRoom) {
-        drawRect((food_X - cameraOffsetX) * GRID_SIZE, (food_Y - cameraOffsetY) * GRID_SIZE, GRID_SIZE, GRID_SIZE, 'green');
+        drawApple(food_X, food_Y);
 
         // Draw hole indicator at bottom right
         ctx.fillStyle = '#333';
         drawRect((GRID_SIZE - 1 - cameraOffsetX) * GRID_SIZE, (GRID_SIZE - 1 - cameraOffsetY) * GRID_SIZE, GRID_SIZE * 2, GRID_SIZE, '#333');
     } else {
-        // Draw both food pixels in secret room
-        drawRect((secretFood_X - cameraOffsetX) * GRID_SIZE, (secretFood_Y - cameraOffsetY) * GRID_SIZE, GRID_SIZE, GRID_SIZE, 'green');
-        drawRect((secretFood2_X - cameraOffsetX) * GRID_SIZE, (secretFood2_Y - cameraOffsetY) * GRID_SIZE, GRID_SIZE, GRID_SIZE, 'green');
+        // Draw both food apples in secret room
+        drawApple(secretFood_X, secretFood_Y);
+        drawApple(secretFood2_X, secretFood2_Y);
     }
 
     // Draw scoreboard in bottom left corner
     ctx.fillStyle = '#fff';
     ctx.font = '20px monospace';
     ctx.fillText('Score: ' + score, 10, canvas.height - 10);
+
+    // Update debug display
+    updateDebugDisplay();
 }
 
 function drawCell(x, y, color) {
@@ -550,18 +737,21 @@ function gameLoop(currentTime) {
     const timeSinceLastTick = currentTime - lastTickTime;
 
     // Determine tick rate based on room (secret room is faster/harder)
-    const currentTickRate = inSecretRoom ? TICK_RATE * 0.7 : TICK_RATE;
+    const effectiveTickRate = inSecretRoom ? currentTickRate * 0.7 : currentTickRate;
 
-    // Update game state if enough time has passed
-    if (timeSinceLastTick >= currentTickRate) {
-        updateGameState();
-        lastTickTime = currentTime;
+    // Only update game state if not paused
+    if (!isPaused) {
+        // Update game state if enough time has passed
+        if (timeSinceLastTick >= effectiveTickRate) {
+            updateGameState();
+            lastTickTime = currentTime;
+        }
+
+        // Calculate interpolation factor (0 to 1)
+        interpolationFactor = Math.min(1, (currentTime - lastTickTime) / effectiveTickRate);
     }
 
-    // Calculate interpolation factor (0 to 1)
-    interpolationFactor = Math.min(1, (currentTime - lastTickTime) / currentTickRate);
-
-    // Render with interpolation
+    // Always render (even when paused)
     render(interpolationFactor);
 
     // Continue the loop
