@@ -313,7 +313,7 @@ var inSecretRoom = false;
 
 // Secret room player position (separate from main room)
 var secretSnakeHead_X = 0;
-var secretSnakeHead_Y = GRID_SIZE - 1;
+var secretSnakeHead_Y = 0;
 var secretSnakeDirection = 'right';
 var secretSnakeBody = [];
 
@@ -345,7 +345,7 @@ var prevSnakeHead_X = 0;
 var prevSnakeHead_Y = 0;
 var prevSnakeBody = [];
 var prevSecretSnakeHead_X = 0;
-var prevSecretSnakeHead_Y = GRID_SIZE - 1;
+var prevSecretSnakeHead_Y = 0;
 var prevSecretSnakeBody = [];
 var prevEnemyHead_X = 10;
 var prevEnemyHead_Y = 10;
@@ -382,12 +382,12 @@ function updateGameState() {
         if (snakeDirection == 'up') snakeHead_Y -= 1;
         if (snakeDirection == 'down') snakeHead_Y += 1;
 
-        // Check for entering secret room
-        if (snakeHead_X >= GRID_SIZE && snakeHead_Y == GRID_SIZE - 1 && snakeDirection == 'right') {
+        // Check for entering secret room (top right)
+        if (snakeHead_X >= GRID_SIZE && snakeHead_Y == 0 && snakeDirection == 'right') {
             inSecretRoom = true;
             // Reset secret room head position to entrance
             secretSnakeHead_X = 0;
-            secretSnakeHead_Y = GRID_SIZE - 1;
+            secretSnakeHead_Y = 0;
             secretSnakeDirection = 'right';
             // Copy body segments to secret room snake
             secretSnakeBody = [];
@@ -417,7 +417,7 @@ function updateGameState() {
         // Main room boundaries
         if (snakeHead_X < 0) snakeHead_X = 0;
         if (snakeHead_Y < 0) snakeHead_Y = 0;
-        if (snakeHead_Y != GRID_SIZE - 1 && snakeHead_X > GRID_SIZE - 1) snakeHead_X = GRID_SIZE - 1;
+        if (snakeHead_Y != 0 && snakeHead_X > GRID_SIZE - 1) snakeHead_X = GRID_SIZE - 1;
         if (snakeHead_Y > GRID_SIZE - 1) snakeHead_Y = GRID_SIZE - 1;
 
         // Building collision - prevent snake from moving into buildings
@@ -468,12 +468,12 @@ function updateGameState() {
         if (secretSnakeDirection == 'up') secretSnakeHead_Y -= 1;
         if (secretSnakeDirection == 'down') secretSnakeHead_Y += 1;
 
-        // Check for leaving secret room
-        if (secretSnakeHead_X < 0 && secretSnakeHead_Y == GRID_SIZE - 1 && secretSnakeDirection == 'left') {
+        // Check for leaving secret room (top left)
+        if (secretSnakeHead_X < 0 && secretSnakeHead_Y == 0 && secretSnakeDirection == 'left') {
             inSecretRoom = false;
             // Set main room head position to exit location
             snakeHead_X = GRID_SIZE - 1;
-            snakeHead_Y = GRID_SIZE - 1;
+            snakeHead_Y = 0;
             snakeDirection = 'left';
             // Copy body segments from secret room to main room
             snakeBody = [];
@@ -849,9 +849,9 @@ function render(interpolation) {
     // Draw main room food
     drawApple(food_X, food_Y);
 
-    // Draw hole indicator at bottom right
+    // Draw hole indicator at top right (entrance to secret room)
     ctx.fillStyle = '#333';
-    drawRect((GRID_SIZE - 1 - cameraOffsetX) * GRID_SIZE, (GRID_SIZE - 1 - cameraOffsetY) * GRID_SIZE, GRID_SIZE * 2, GRID_SIZE, '#333');
+    drawRect((GRID_SIZE - 1 - cameraOffsetX) * GRID_SIZE, (0 - cameraOffsetY) * GRID_SIZE, GRID_SIZE * 2, GRID_SIZE, '#333');
 
     // RENDER SECRET ROOM (always render, offset by 20 grid units)
     // Temporarily adjust camera offset to render secret room at x+20
@@ -913,6 +913,10 @@ function render(interpolation) {
     // Draw both food apples in secret room
     drawApple(secretFood_X, secretFood_Y);
     drawApple(secretFood2_X, secretFood2_Y);
+
+    // Draw hole indicator at top left (exit from secret room)
+    ctx.fillStyle = '#333';
+    drawRect((0 - cameraOffsetX) * GRID_SIZE - GRID_SIZE, (0 - cameraOffsetY) * GRID_SIZE, GRID_SIZE * 2, GRID_SIZE, '#333');
 
     // Restore original camera offset
     cameraOffsetX = originalCameraX;
